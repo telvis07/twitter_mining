@@ -11,6 +11,7 @@ to play with cool tech.
 
 ## To run
 1. Run filter_tweets_streaming_api.py to load tweets to couchdb.
+
   $ python filter_tweets_streaming_api.py test twitter
   opened test
   Track parameters ['twitter']
@@ -19,6 +20,7 @@ to play with cool tech.
   ...
 
 2. Run a "reporting" script such as top_tweeters_by_follower_count.py. More to come..
+
   $ python top_tweeters_by_follower_count.py test 2012-03-05
   1329886800 1329973199
   Top 10 tweeters
