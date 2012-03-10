@@ -6,7 +6,7 @@ import os,sys
 
 def login():
     config = ConfigParser.RawConfigParser()
-    fn = os.path.join(os.environ['HOME'],'conf', 'twitter_mining.conf')
+    fn = os.path.join(os.environ['HOME'],'conf', 'twitter_mining.cfg')
     config.read(fn)
     # Get these values from your application settings
 
