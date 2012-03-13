@@ -11,13 +11,14 @@ tweetid "look at my awesome tweet"
 1 tweeter2 followercount
 ...
 """
-import sys,time
+import sys,time,os
 import couchdb
-from couchdb.design import ViewDefinition
 import jsonlib2 as json
 from datetime import datetime
+import ConfigParser
+from optparse import OptionParser
 
-def main(db, date):
+def run(db, date):
     dt = datetime.strptime(date,"%Y-%m-%d")
     stime=int(time.mktime(dt.timetuple()))
     etime=stime+86400-1
@@ -37,18 +38,51 @@ def main(db, date):
     di = tweeters.items()
     di.sort(key=lambda x: x[1], reverse=True)
     print "Top 10 tweeters"
+    out = {}
     for i in range(10):
         screen_name = di[i][0]
         followers_count = di[i][1]
-        print i,screen_name,followers_count
+        out[screen_name] = {}
+        out[screen_name]['follower_count'] = followers_count
+        out[screen_name]['tweets'] = []
+        # print i,screen_name,followers_count
         for tweetid in tweets[screen_name]:
-            print tweetid, db[tweetid]['orig_text']
+            orig_text = db[tweetid]['orig_text']
+            # print tweetid,orig_text
+            out[screen_name]['tweets'].append(orig_text)
+
+    print json.dumps(out,indent=2)
+    return json.dumps(out,indent=2)
 
 if __name__=='__main__':
-    server = couchdb.Server('http://localhost:5984')
-    db = sys.argv[1]
-    db = server[db]
-    date = sys.argv[2]
+    op = OptionParser('%prog <date> [OPTIONS]')
+    op.add_option('-c','--config',dest='config',
+                  default=os.path.join(os.environ['HOME'],'conf', 'twitter_mining.cfg'),
+                  help='Path to configuration file')
+    op.add_option('-d', '--dbname', dest='dbname',
+                  help='CouchDB database name')
+    op.add_option('-b','--dbhost', dest='dbhost',
+                  default='http://localhost:5984',
+                  help='Url to CouchDB host')
+    (opts, args) = op.parse_args()
 
-    import views # create indexes if not already
-    main(db, date)
+    if not opts.config \
+       or not opts.dbname \
+       or not opts.dbhost \
+       or len(args) != 1:
+        print "Missing required options"
+        op.print_help()
+        sys.exit(1)
+
+    server = couchdb.Server(opts.dbhost)
+    db = server[opts.dbname]
+    date = args[0]
+
+    # run report
+    output = run(db, date)
+
+    from mail_results import send_email 
+    config = ConfigParser.RawConfigParser()
+    config.read(opts.config)
+    subj = "Top tweeters by follower count for '%s'"%date
+    send_email(config, config.get(opts.dbname,'to'), subj, output)
