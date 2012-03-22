@@ -5,7 +5,16 @@ from datetime import datetime
 import ConfigParser
 
 def send_email(config, to, subj, msg, dryrun=False):
-    
+    """
+    Send email based on config. Sample below:
+
+    [email]
+    mailfrom = Foo <foo@bar.com>
+    username = foo
+    password = fooF00!
+    server=mail.bar.com
+    port=25
+    """
     # Config and Credentials (if needed)  
     me = config.get('email','mailfrom')
     username = config.get('email','username')
@@ -45,4 +54,4 @@ if __name__=='__main__':
     config = ConfigParser.RawConfigParser()
     fn = os.path.join(os.environ['HOME'],'conf', 'twitter_mining.cfg')
     config.read(fn)
-    email(config, 'telvis07@gmail.com', "This is a test message", "This is a test message @ '%s'"%str(datetime.today()))
+    email(config, 'example@example.com', "This is a test message", "This is a test message @ '%s'"%str(datetime.today()))

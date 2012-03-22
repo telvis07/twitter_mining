@@ -4,12 +4,8 @@ Use couchdb view to rank tweets by author's follower count.
 
 USAGE %prog [database] [date in YYYY-MM-DD format]
 $ python top_tweeters_by_follower_count.py test 2012-03-05
-1329886800 1329973199
-Top 10 tweeters
-0 tweeter1 followercount
-tweetid "look at my awesome tweet"
-1 tweeter2 followercount
-...
+
+Make sure to run `python views.py` to create your views.
 """
 import sys,time,os
 import couchdb
@@ -103,4 +99,10 @@ if __name__=='__main__':
     config = ConfigParser.RawConfigParser()
     config.read(opts.config)
     subj = "Top tweets by follower count for '%s'"%date
+
+    """
+    read email from config. An example is:
+    [dbname]
+    to = me@foo.com
+    """
     send_email(config, config.get(opts.dbname,'to'), subj, output, dryrun=opts.dryrun)
