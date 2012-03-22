@@ -13,18 +13,34 @@ tweetid "look at my awesome tweet"
 """
 import sys,time,os
 import couchdb
-import jsonlib2 as json
 from datetime import datetime
 import ConfigParser
 from optparse import OptionParser
 
-def run(db, date):
+def format_message(data):
+    """Format dict as unicode string"""
+    di = [(nm,data[nm]['follower_count']) for nm in data]
+    di.sort(key=lambda x: x[1], reverse=True)
+    out = u""
+    for row in di:
+        screen_name, count = row
+        out += u"%(screen_name)s <http://twitter.com/%(screen_name)s>\n"%{'screen_name':screen_name}
+        for tweetid in data[screen_name]['tweets']:
+            tweet = data[screen_name]['tweets'][tweetid]
+            out += u"  %s (https://twitter.com/%s/status/%s)\n"%(tweet,screen_name,tweetid)
+        out+=u'\n'
+    return out 
+
+def run(db, date, limit=10):
+    """Query a couchdb view for tweets. Sort in memory by follower count.
+    Return the top 10 tweeters and their tweets"""
+    print "Finding top %d tweeters"%limit
+
     dt = datetime.strptime(date,"%Y-%m-%d")
     stime=int(time.mktime(dt.timetuple()))
     etime=stime+86400-1
     tweeters = {}
     tweets = {}
-    print stime,etime
     for row in db.view('index/daily_tweets', startkey=stime, endkey=etime):
         status = row.value
         screen_name = status['user']['screen_name']
@@ -37,22 +53,20 @@ def run(db, date):
     # sort
     di = tweeters.items()
     di.sort(key=lambda x: x[1], reverse=True)
-    print "Top 10 tweeters"
     out = {}
-    for i in range(10):
+    for i in range(limit):
         screen_name = di[i][0]
         followers_count = di[i][1]
         out[screen_name] = {}
         out[screen_name]['follower_count'] = followers_count
-        out[screen_name]['tweets'] = []
+        out[screen_name]['tweets'] = {}
         # print i,screen_name,followers_count
         for tweetid in tweets[screen_name]:
             orig_text = db[tweetid]['orig_text']
             # print tweetid,orig_text
-            out[screen_name]['tweets'].append(orig_text)
+            out[screen_name]['tweets'][tweetid] = orig_text
 
-    print json.dumps(out,indent=2)
-    return json.dumps(out,indent=2)
+    return out
 
 if __name__=='__main__':
     op = OptionParser('%prog <date> [OPTIONS]')
@@ -64,6 +78,9 @@ if __name__=='__main__':
     op.add_option('-b','--dbhost', dest='dbhost',
                   default='http://localhost:5984',
                   help='Url to CouchDB host')
+    op.add_option('--dry-run', dest='dryrun', action='store_true',
+                   default=False,  
+                   help="don't really send the email")
     (opts, args) = op.parse_args()
 
     if not opts.config \
@@ -80,9 +97,10 @@ if __name__=='__main__':
 
     # run report
     output = run(db, date)
+    output = format_message(output)
 
     from mail_results import send_email 
     config = ConfigParser.RawConfigParser()
     config.read(opts.config)
-    subj = "Top tweeters by follower count for '%s'"%date
-    send_email(config, config.get(opts.dbname,'to'), subj, output)
+    subj = "Top tweets by follower count for '%s'"%date
+    send_email(config, config.get(opts.dbname,'to'), subj, output, dryrun=opts.dryrun)
