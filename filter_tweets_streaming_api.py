@@ -37,10 +37,19 @@ def get_trace():
 class CustomStreamListener(tweepy.StreamListener):
     def __init__(self):
         tweepy.StreamListener.__init__(self)
+        self.i = 0
 
     def on_status(self, status):
         global db # couchdb (global)
         try:
+            # skip retweets
+            if status.retweet_count:
+                return True
+
+            # skip if already in couch
+            if status.id_str in db:
+                return True
+
             now = time.mktime(time.gmtime())
 
             results = {}
@@ -48,10 +57,12 @@ class CustomStreamListener(tweepy.StreamListener):
             results['text']=status.text.lower()
             results['orig_text']=status.text
             results['id_str']=status.id_str
-            results['created_at'] = time.mktime(status.created_at.timetuple())
+            results['created_at'] = time.mktime(status.created_at.utctimetuple())
             results['entities'] = status.entities # urls, hashtags, mentions,
             results['source'] = status.source
             results['geo'] = status.geo
+            results['retweet_count'] = status.retweet_count
+            results['retweeted'] = status.retweeted
             # user info
             results['user'] = {}
             results['user']['screen_name']=status.author.screen_name
@@ -67,14 +78,26 @@ class CustomStreamListener(tweepy.StreamListener):
             results['user']['geo_enabled']=status.author.geo_enabled
             results['user']['verified']=status.author.verified
 
+            
             d = int(now - results['created_at']) # bigger the number, worse the lag cuz the the tweet is older
-            print "Delay %d seconds. created_at %s. id_str '%s'. tweeter '%s'. tweet '%s'"%(d,str(status.created_at),results['id_str'],status.author.screen_name,status.text)
 
             # store in db
             db[results['id_str']] = results
+            self.i+=1
+
+            if self.i%100==0:
+                self.i=0
+                print "Delay %d seconds. created_at %s. id_str '%s'. tweeter '%s'. tweet '%s'"%(d,str(status.created_at),results['id_str'],status.author.screen_name,status.text)
+
+            # TODO: put status in queue for thread pool to write to couch
+            if d > 60:
+                print "Too slow... aborting"
+                return False
         except Exception, e:
             print >> sys.stderr, 'Encountered Exception:', e, get_trace()
             pass
+
+        return True
 
     def on_delete(self, status_id, user_id):
         print 'Got DELETE message:', status_id, user_id
@@ -82,7 +105,7 @@ class CustomStreamListener(tweepy.StreamListener):
         
     def on_limit(self, track):
         """Called when a limitation notice arrvies"""
-        print 'Rate limit', str(track)
+        print 'Got Rate limit Message', str(track)
         return True # Don't kill the stream
 
     def on_error(self, status_code):
@@ -94,15 +117,26 @@ class CustomStreamListener(tweepy.StreamListener):
         return True # Don't kill the stream
     
     def on_stall_warning(self, status):
-        print "Warning received",str(status)
+        print "Got Stall Warning message",str(status)
         return True # Don't kill the stream
         
 try:
-    # Create a streaming API and set a timeout value of 1 minute
-    auth = login()
-    streaming_api = tweepy.streaming.Stream(auth, CustomStreamListener(), timeout=60)
-    Q = sys.argv[2:] 
-    print "Track parameters",str(Q)
-    streaming_api.filter(follow=None, track=Q)
+    while True:
+        try:
+            # oauth dance
+            auth = login()
+            # Create a streaming API and set a timeout value of 1 minute
+            streaming_api = tweepy.streaming.Stream(auth, CustomStreamListener(), timeout=60)
+            Q = sys.argv[2:] 
+            print "Track parameters",str(Q)
+            streaming_api.filter(follow=None, track=Q)
+        except Exception, ex:
+            err =  "'%s' Error '%s' '%s'"%(str(datetime.now()), str(ex), get_trace())
+            print err
+            file('errors.txt','a').write(err+'\n')
+        finally:
+            print "disconnecting..."
+            streaming_api.disconnect()
+            # time.sleep(60)
 except KeyboardInterrupt:
     print "got keyboardinterrupt"
