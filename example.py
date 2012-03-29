@@ -9,7 +9,7 @@ class Listener(tweepy.StreamListener):
 
 def login():
     config = ConfigParser.RawConfigParser()
-    fn = os.path.join(os.environ['HOME'],'conf', 'twitter_mining.cfg')
+    fn = 'twitter_mining.cfg'
     config.read(fn)
 
     CONSUMER_KEY = config.get('auth','CONSUMER_KEY')
