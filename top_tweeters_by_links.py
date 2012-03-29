@@ -12,6 +12,7 @@ import couchdb
 from datetime import datetime
 import ConfigParser
 from optparse import OptionParser
+import json
 
 def format_message(data):
     """Format dict as unicode string"""
@@ -20,10 +21,12 @@ def format_message(data):
     out = u""
     for row in di:
         screen_name, count = row
+        out += u"-"*10+'\n'
         out += u"%(screen_name)s <http://twitter.com/%(screen_name)s>\n"%{'screen_name':screen_name}
         for tweetid in data[screen_name]['tweets']:
             tweet = data[screen_name]['tweets'][tweetid]
             out += u"  %s (https://twitter.com/%s/status/%s)\n"%(tweet,screen_name,tweetid)
+        out += u"-"*10+'\n'
         out+=u'\n'
     return out 
 
@@ -37,7 +40,8 @@ def run(db, date, limit=10):
     etime=stime+86400-1
     tweeters = {}
     tweets = {}
-    for row in db.view('index/daily_tweets', startkey=stime, endkey=etime):
+    # get screen_name, follower_counts and tweet ids for looking up later
+    for row in db.view('index/daily_url_tweets', startkey=stime, endkey=etime):
         status = row.value
         screen_name = status['user']['screen_name']
         followers_count = status['user']['followers_count']
@@ -47,6 +51,7 @@ def run(db, date, limit=10):
         tweets[screen_name].append(status['id_str'])
 
     # sort
+    print len(tweeters.keys())
     di = tweeters.items()
     di.sort(key=lambda x: x[1], reverse=True)
     out = {}
@@ -58,9 +63,14 @@ def run(db, date, limit=10):
         out[screen_name]['tweets'] = {}
         # print i,screen_name,followers_count
         for tweetid in tweets[screen_name]:
-            orig_text = db[tweetid]['orig_text']
+            status = db[tweetid]
+            text = status['orig_text']
             # print tweetid,orig_text
-            out[screen_name]['tweets'][tweetid] = orig_text
+            urls = status['entities']['urls']
+            #name = status['user']['name']
+            for url in urls:
+                text = text.replace(url['url'],url['expanded_url'])
+            out[screen_name]['tweets'][tweetid] = text
 
     return out
 
@@ -93,10 +103,11 @@ if __name__=='__main__':
     date = args[0]
 
     # run report
-    subj = "%s: top tweets by follower count for '%s'"%(opts.dbname, date)
+    subj = "%s: top tweets with links '%s'"%(opts.dbname, date)
     print subj
     output = run(db, date)
     output = format_message(output)
+    print output
 
     from mail_results import send_email 
     config = ConfigParser.RawConfigParser()

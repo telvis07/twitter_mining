@@ -3,3 +3,13 @@ CONSUMER_KEY = ...
 CONSUMER_SECRET = ...
 ACCESS_TOKEN = ...
 ACCESS_TOKEN_SECRET = ...
+
+[email]
+mailfrom=Foo <foo@bar.com>
+username = foo+bar.com
+password = p@ssW0rdz
+server=mail.bar.com
+port=25
+
+[midtownsweets]
+to=daily@bar.com
