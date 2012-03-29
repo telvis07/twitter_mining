@@ -15,6 +15,7 @@ def send_email(config, to, subj, msg, dryrun=False):
     server=mail.bar.com
     port=25
     """
+    toaddrs = [addr.strip() for addr in to.split(',')]
     # Config and Credentials (if needed)  
     me = config.get('email','mailfrom')
     username = config.get('email','username')
@@ -36,7 +37,7 @@ def send_email(config, to, subj, msg, dryrun=False):
         msg = MIMEText(msg.encode(body_charset), 'plain', body_charset)
         msg['Subject'] = subj
         msg['From'] = me
-        msg['To'] = to
+        msg['To'] = ", ".join(toaddrs)
 
         if dryrun:
             print "Dry-run email:",msg.as_string()
@@ -44,7 +45,7 @@ def send_email(config, to, subj, msg, dryrun=False):
 
         server = smtplib.SMTP(server, port=port)
         server.login(username,password)  
-        server.sendmail(me, to, msg.as_string())  
+        server.sendmail(me, toaddrs, msg.as_string())  
         server.quit() 
         print "Sent email:",msg.as_string()
     except smtplib.SMTPException:
