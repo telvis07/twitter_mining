@@ -85,6 +85,7 @@ if __name__=='__main__':
        or len(args) != 1:
         print "Missing required options"
         op.print_help()
+        print sys.argv
         sys.exit(1)
 
     server = couchdb.Server(opts.dbhost)
@@ -92,13 +93,14 @@ if __name__=='__main__':
     date = args[0]
 
     # run report
+    subj = "%s: top tweets by follower count for '%s'"%(opts.dbname, date)
+    print subj
     output = run(db, date)
     output = format_message(output)
 
     from mail_results import send_email 
     config = ConfigParser.RawConfigParser()
     config.read(opts.config)
-    subj = "Top tweets by follower count for '%s'"%date
 
     """
     read email from config. An example is:
