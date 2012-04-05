@@ -126,12 +126,12 @@ try:
             # oauth dance
             auth = login()
             # Create a streaming API and set a timeout value of 1 minute
-            streaming_api = tweepy.streaming.Stream(auth, CustomStreamListener(), timeout=60)
+            streaming_api = tweepy.streaming.Stream(auth, CustomStreamListener(), timeout=60, secure=True)
             Q = sys.argv[2:] 
             print "Track parameters",str(Q)
             streaming_api.filter(follow=None, track=Q)
         except Exception, ex:
-            err =  "'%s' Error '%s' '%s'"%(str(datetime.now()), str(ex), get_trace())
+            err =  "'%s' '%s' Error '%s' '%s'"%(dbname, str(datetime.now()), str(ex), get_trace())
             print err
             file('errors.txt','a').write(err+'\n')
         finally:
