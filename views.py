@@ -13,6 +13,7 @@ db = sys.argv[1]
 db = server[db]
 
 def tweets_by_created_at(doc):
+    """tweets by timestamp"""
     if doc.get('created_at'):
         _date = doc['created_at']
     else:
@@ -25,6 +26,7 @@ view = ViewDefinition('index', 'daily_tweets', tweets_by_created_at, language='p
 view.sync(db)
 
 def url_tweets_by_created_at(doc):
+    """filter tweets with links by timestamp"""
     if doc.get('created_at'):
         _date = doc['created_at']
     else:
@@ -37,3 +39,46 @@ def url_tweets_by_created_at(doc):
 view = ViewDefinition('index', 'daily_url_tweets', url_tweets_by_created_at, language='python')
 view.sync(db)
 
+def time_hashtag_mapper(doc):
+    """Hash tag by timestamp"""
+    if doc.get('created_at'):
+        _date = doc['created_at']
+    else:
+        _date = 0 # Jan 1 1970
+
+    if doc.get('entities') and doc['entities'].get('hashtags'):
+        for hashtag in (doc['entities']['hashtags']):
+            yield(_date, hashtag)
+
+view = ViewDefinition('index',
+                      'time_hashtags',
+                      time_hashtag_mapper, 
+                      language='python')
+view.sync(db)
+
+def date_hashtag_mapper(doc):
+    """tweet by date+hashtag"""
+    from datetime import date
+    if doc.get('created_at'):
+        _date = doc['created_at']
+    else:
+        _date = 0 # Jan 1 1970
+
+    dt = date.fromtimestamp(_date).timetuple()
+    if doc.get('entities') and doc['entities'].get('hashtags'):
+        for hashtag in (doc['entities']['hashtags']):
+            yield ([dt.tm_year, dt.tm_mon, dt.tm_mday, hashtag], doc['_id'])
+
+def sumreducer(keys, values, rereduce):
+    """count then sum"""
+    if rereduce:
+        return sum(values)
+    else:
+        return len(values)
+
+view = ViewDefinition('index',
+                      'daily_tagcount', 
+                      date_hashtag_mapper, 
+                      reduce_fun=sumreducer,
+                      language='python')
+view.sync(db)
