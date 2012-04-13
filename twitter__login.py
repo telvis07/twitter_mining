@@ -1,14 +1,16 @@
 #!/usr/bin/env python
 """Tweepy oauth dance"""
 import tweepy
-import ConfigParser
-import os,sys
 
-def login():
-    config = ConfigParser.RawConfigParser()
-    fn = os.path.join(os.environ['HOME'],'conf', 'twitter_mining.cfg')
-    config.read(fn)
-    # Get these values from your application settings
+def login(config):
+    """The config file should contain:
+
+    [auth]
+    CONSUMER_KEY = ...
+    CONSUMER_SECRET = ...
+    ACCESS_TOKEN = ...
+    ACCESS_TOKEN_SECRET = ...
+    """
 
     CONSUMER_KEY = config.get('auth','CONSUMER_KEY')
     CONSUMER_SECRET = config.get('auth','CONSUMER_SECRET')

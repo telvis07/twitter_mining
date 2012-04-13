@@ -11,7 +11,8 @@ Delay 0 seconds. created_at 2012-03-05 01:11:45. id_str '17647.....'. tweeter 's
 Delay 0 seconds. created_at 2012-03-05 01:11:45. id_str '17647.....'. tweeter 'tweeter_guy'. tweet 'Twitter is fun!'
 ...
 """
-import sys
+import sys, os
+import ConfigParser
 import traceback
 import tweepy
 import jsonlib2 as json
@@ -121,17 +122,22 @@ class CustomStreamListener(tweepy.StreamListener):
         return True # Don't kill the stream
         
 try:
+    # my config is hard coded
+    fn = os.path.join(os.environ['HOME'],'conf', 'twitter_mining.cfg')
+    config = ConfigParser.RawConfigParser()
+    config.read(fn)
+
     while True:
         try:
             # oauth dance
-            auth = login()
+            auth = login(config)
             # Create a streaming API and set a timeout value of 1 minute
-            streaming_api = tweepy.streaming.Stream(auth, CustomStreamListener(), timeout=60)
+            streaming_api = tweepy.streaming.Stream(auth, CustomStreamListener(), timeout=60, secure=True)
             Q = sys.argv[2:] 
             print "Track parameters",str(Q)
             streaming_api.filter(follow=None, track=Q)
         except Exception, ex:
-            err =  "'%s' Error '%s' '%s'"%(str(datetime.now()), str(ex), get_trace())
+            err =  "'%s' '%s' Error '%s' '%s'"%(dbname, str(datetime.now()), str(ex), get_trace())
             print err
             file('errors.txt','a').write(err+'\n')
         finally:
