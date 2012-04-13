@@ -4,13 +4,15 @@ from datetime import date, datetime
 from couchdb.design import ViewDefinition
 
 def time_tag_mapper(doc):
+    from datetime import datetime
     if doc.get('tag'):
-        yield(doc['time'], doc['tag'])
+        dt = datetime.fromtimestamp(doc['time']).utctimetuple()
+        yield ([dt.tm_year, dt.tm_mon, dt.tm_mday], doc['tag'])
 
 def tag_mapper(doc):
-    from datetime import date
+    from datetime import datetime
     if doc.get('tag') and doc.get('time'):
-        dt = date.fromtimestamp(doc['time']).timetuple()
+        dt = datetime.fromtimestamp(doc['time']).utctimetuple()
         yield ([dt.tm_year, dt.tm_mon, dt.tm_mday, doc['tag']], doc['_id'])
 
 def tag_sumreducer(keys, values, rereduce):
@@ -43,13 +45,15 @@ def main():
 
     # query
     _date = "2012-04-11"
-    dt = datetime.strptime(_date,"%Y-%m-%d")
-    stime=int(time.mktime(dt.utctimetuple()))
-    etime=stime+86400-1
+    dt = datetime.strptime(_date,"%Y-%m-%d").utctimetuple()
+    #dt = datetime.strptime(_date,"%Y-%m-%d")
+    #stime=int(time.mktime(dt.utctimetuple()))
+    # etime=stime+86400-1
 
     view = ViewDefinition('index','daily_tags',time_tag_mapper, language='python')
     view.sync(db)
-    tags = [row.value for row in db.view('index/daily_tags',startkey=stime,endkey=etime)]
+    # tags = [row.value for row in db.view('index/daily_tags',startkey=stime,endkey=etime)]
+    tags = [row.value for row in db.view('index/daily_tags',key=[dt.tm_year, dt.tm_mon, dt.tm_mday])]
     tags = list(set(tags))
     print "Tags today",set(tags)
     print ""
@@ -57,7 +61,8 @@ def main():
     view = ViewDefinition('index','daily_tagcount', tag_mapper, reduce_fun=tag_sumreducer,
                           language='python')
     view.sync(db)
-    d = dt.timetuple()
+    #d = dt.timetuple()
+    d = dt
     for tag in sorted(tags):
         # tag_counts = [ (row.key, row.value) for row in db.view('index/tagcount', group=True) ]
         _key = [d.tm_year, d.tm_mon, d.tm_mday, tag]

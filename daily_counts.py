@@ -8,21 +8,17 @@ dbname = sys.argv[1]
 db = server[dbname]
 
 _date  = sys.argv[2]
-dt = datetime.strptime(_date,"%Y-%m-%d")
-stime=int(time.mktime(dt.utctimetuple()))
-etime=stime+86400-1
+dt = datetime.strptime(_date,"%Y-%m-%d").utctimetuple()
 
 # get tags for this time interval
-tags = [row.value for row in db.view('index/time_hashtags',
-                                     startkey=stime,endkey=etime)]
+_key = [dt.tm_year, dt.tm_mon, dt.tm_mday]
+tags = [row.value for row in db.view('index/time_hashtags', key=_key)]
 tags = list(set(tags))
-print "Tags today",set(tags)
+print "Tags today",len(tags)
 print ""
 
 # get count for date and hashtag
-d = dt.timetuple()
 for tag in sorted(tags):
-    _key = [d.tm_year, d.tm_mon, d.tm_mday, tag]
-    tag_count = [ (row.value) for row in db.view('index/daily_tagcount', 
-                                                              key=_key) ][0]
-    print "Found %d %s on %s-%s-%s "%(tag_count,tag,_key[0],_key[1],_key[2])
+    _key = [dt.tm_year, dt.tm_mon, dt.tm_mday, tag]
+    tag_count = [ (row.value) for row in db.view('index/daily_tagcount', key=_key) ]
+    print "Found %d %s on %s-%s-%s "%(tag_count[0],tag,_key[0],_key[1],_key[2])

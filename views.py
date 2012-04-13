@@ -41,14 +41,17 @@ view.sync(db)
 
 def time_hashtag_mapper(doc):
     """Hash tag by timestamp"""
+    from datetime import datetime
     if doc.get('created_at'):
         _date = doc['created_at']
     else:
         _date = 0 # Jan 1 1970
 
     if doc.get('entities') and doc['entities'].get('hashtags'):
+        dt = datetime.fromtimestamp(_date).utctimetuple()
         for hashtag in (doc['entities']['hashtags']):
-            yield(_date, hashtag)
+            yield([dt.tm_year, dt.tm_mon, dt.tm_mday], 
+                   hashtag['text'].lower())
 
 view = ViewDefinition('index',
                       'time_hashtags',
@@ -58,16 +61,18 @@ view.sync(db)
 
 def date_hashtag_mapper(doc):
     """tweet by date+hashtag"""
-    from datetime import date
+    from datetime import datetime
     if doc.get('created_at'):
         _date = doc['created_at']
     else:
         _date = 0 # Jan 1 1970
 
-    dt = date.fromtimestamp(_date).timetuple()
+    dt = datetime.fromtimestamp(_date).utctimetuple()
     if doc.get('entities') and doc['entities'].get('hashtags'):
         for hashtag in (doc['entities']['hashtags']):
-            yield ([dt.tm_year, dt.tm_mon, dt.tm_mday, hashtag], doc['_id'])
+            yield ([dt.tm_year, dt.tm_mon, dt.tm_mday, 
+                    hashtag['text'].lower()], 
+                   doc['_id'])
 
 def sumreducer(keys, values, rereduce):
     """count then sum"""
