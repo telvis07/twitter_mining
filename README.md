@@ -1,5 +1,5 @@
 # Twitter Mining
-This project contains python code for twitter mining.
+This project contains python code for twitter mining..
 
 ## Goal
 My goal is to find novel ways to summarize topics and trends on twitter.
