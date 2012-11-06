@@ -11,5 +11,13 @@ password = p@ssW0rdz
 server=mail.bar.com
 port=25
 
-[midtownsweets]
+[db1]
+to=daily@foo.com
+
+[db2]
 to=daily@bar.com
+
+[match]
+databases=db1,db2
+regex=((?P<db1>foo)|(?P<db2>bar))
+track=foo,bar
