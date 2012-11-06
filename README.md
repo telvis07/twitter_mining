@@ -10,24 +10,22 @@ My goal is to find novel ways to summarize topics and trends on twitter.
 - [tweepy](https://github.com/tweepy/tweepy)
 
 ## To run
-1. Run filter_tweets_streaming_api.py to load tweets to couchdb. The delay shows when your consumer is too slow.
-
-    $ python filter_tweets_streaming_api.py test twitter  
-    opened test  
-    Track parameters ['twitter']  
-    Delay 0 seconds. created_at 2012-03-05 01:11:45. id_str '17647.....'. tweeter 'sometweeter'. tweet 'I love to tweet!'  
-    Delay 0 seconds. created_at 2012-03-05 01:11:45. id_str '17647.....'. tweeter 'tweeter_guy'. tweet 'Twitter is fun!'  
-    ...  
+1. Run filter_tweets_streaming_api.py to store tweets. The delay shows when your consumer is too slow.
+<pre>
+   $ /usr/bin/python filter_tweets_streaming_api.py twitter_mining.cfg
+</pre>
 
 2. Run views.py to create indexes on your couchdb database  
+<pre>
     $ python views.py test
+</pre>
 
 3. Run a "reporting" script such as top_tweeters_by_follower_count.py and send a summary email of tweets  
+<pre>
     $ python top_tweeters_by_follower_count.py -d test 2012-03-05 --dry-run  
     Top 10 tweeters  
     tweeter1  
      "look at my awesome tweet"  
     tweeter2  
      "i'm colder than a polar bears toe nails"  
-
-4. That's all for now...  
+</pre>
