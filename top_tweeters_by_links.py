@@ -14,6 +14,11 @@ import ConfigParser
 from optparse import OptionParser
 import json
 
+try:
+    BLACKLIST = [line.strip() for line in file('blacklist.txt')]
+except:
+    BLACKLIST = []
+
 def format_message(data):
     """Format dict as unicode string"""
     di = [(nm,data[nm]['follower_count']) for nm in data]
@@ -43,6 +48,10 @@ def run(db, date, limit=10):
     # get screen_name, follower_counts and tweet ids for looking up later
     for row in db.view('index/daily_url_tweets', startkey=stime, endkey=etime):
         status = row.value
+        if status['user']['lang'].lower() != "en":
+            continue # skip non-english tweeters
+        if status['user']['screen_name'] in BLACKLIST:
+            continue
         screen_name = status['user']['screen_name']
         followers_count = status['user']['followers_count']
         tweeters[screen_name] = int(followers_count)
@@ -104,10 +113,8 @@ if __name__=='__main__':
 
     # run report
     subj = "%s: top tweets with links '%s'"%(opts.dbname, date)
-    print subj
     output = run(db, date)
     output = format_message(output)
-    print output
 
     from mail_results import send_email 
     config = ConfigParser.RawConfigParser()
