@@ -11,7 +11,7 @@ Delay 0 seconds. created_at 2012-03-05 01:11:45. id_str '17647.....'. tweeter 's
 Delay 0 seconds. created_at 2012-03-05 01:11:45. id_str '17647.....'. tweeter 'tweeter_guy'. tweet 'Twitter is fun!'
 ...
 """
-import sys, os
+import sys, os, re
 import ConfigParser
 import traceback
 import tweepy
@@ -20,32 +20,59 @@ import couchdb
 import time
 from datetime import datetime
 from twitter__login import login
+import logging
+
+FORMAT = '%(levelname)s %(message)s'
+logging.basicConfig(format=FORMAT)
+log = logging.getLogger('tweepy')
+log.setLevel(logging.INFO)
 
 # global server
 server = couchdb.Server('http://localhost:5984')
-dbname = sys.argv[1]
-try:
-    db = server[dbname]
-    print "opened",dbname
-except couchdb.ResourceNotFound:
-    print "creating db",dbname
-    db = server.create(dbname)
+def getdb(dbname):
+    try:
+        db = server[dbname]
+        log.info("opened "+dbname)
+    except couchdb.ResourceNotFound:
+        log.error("creating db "+dbname)
+        db = server.create(dbname)
+    return db
 
 
 def get_trace():
     return ''.join(traceback.format_exception(*sys.exc_info()))        
 
+def filtergroupdict(ma):
+    """Remove all entries with values == None"""
+    di = filter(lambda x: x[1]!=None, ma.groupdict().items())
+
+    if len(di) != 1:
+        return None
+
+    return di[0][0]
+
 class CustomStreamListener(tweepy.StreamListener):
-    def __init__(self):
+    def __init__(self, dbdict, regex):
         tweepy.StreamListener.__init__(self)
         self.i = 0
+        self.dbdict = dbdict
+        self.match_filter = re.compile(regex,re.VERBOSE|re.MULTILINE).search
 
     def on_status(self, status):
-        global db # couchdb (global)
         try:
             # skip retweets
             if status.retweet_count:
                 return True
+
+            txt = status.text.lower()
+            for url in status.entities['urls']:
+                txt += url['expanded_url']
+
+            ma = self.match_filter(txt)
+            if ma:
+                ret = filtergroupdict(ma)
+                db = self.dbdict[ret] 
+                log.debug("Found match for '%s'"%ret)
 
             # skip if already in couch
             if status.id_str in db:
@@ -59,6 +86,7 @@ class CustomStreamListener(tweepy.StreamListener):
             results['orig_text']=status.text
             results['id_str']=status.id_str
             results['created_at'] = time.mktime(status.created_at.utctimetuple())
+            results['created_at_msecs'] = results['created_at']*1000
             results['entities'] = status.entities # urls, hashtags, mentions,
             results['source'] = status.source
             results['geo'] = status.geo
@@ -78,8 +106,9 @@ class CustomStreamListener(tweepy.StreamListener):
             results['user']['description']=status.author.description
             results['user']['geo_enabled']=status.author.geo_enabled
             results['user']['verified']=status.author.verified
+#            print json.dumps(results)
 
-            
+
             d = int(now - results['created_at']) # bigger the number, worse the lag cuz the the tweet is older
 
             # store in db
@@ -88,61 +117,83 @@ class CustomStreamListener(tweepy.StreamListener):
 
             if self.i%100==0:
                 self.i=0
-                print "Delay %d seconds. created_at %s. id_str '%s'. tweeter '%s'. tweet '%s'"%(d,str(status.created_at),results['id_str'],status.author.screen_name,status.text)
+                log.info("Delay %d seconds. created_at %s. id_str '%s'. tweeter '%s'. tweet '%s'"%(d,str(status.created_at),results['id_str'],status.author.screen_name,status.text))
 
-            # TODO: put status in queue for thread pool to write to couch
             if d > 60:
-                print "Too slow... aborting"
+                log.error("Too slow... aborting")
                 return False
         except Exception, e:
-            print >> sys.stderr, 'Encountered Exception:', e, get_trace()
+            log.error('Encountered Exception: %s %s'%(e, get_trace()))
             pass
 
         return True
 
     def on_delete(self, status_id, user_id):
-        print 'Got DELETE message:', status_id, user_id
+        log.error("Got DELETE message: '%s' %s"%(status_id, user_id))
         return True # Don't kill the stream
         
     def on_limit(self, track):
         """Called when a limitation notice arrvies"""
-        print 'Got Rate limit Message', str(track)
+        log.error('Got Rate limit Message %s'%str(track))
         return True # Don't kill the stream
 
     def on_error(self, status_code):
-        print 'Encountered error with status code:', status_code
+        log.error('Encountered error with status code: %s'%status_code)
         return True # Don't kill the stream
 
     def on_timeout(self):
-        print 'Timeout...'
+        log.error('Timeout...')
         return True # Don't kill the stream
     
     def on_stall_warning(self, status):
-        print "Got Stall Warning message",str(status)
+        log.error("Got Stall Warning message "+str(status))
         return True # Don't kill the stream
         
+streaming_api = None
 try:
-    # my config is hard coded
-    fn = os.path.join(os.environ['HOME'],'conf', 'twitter_mining.cfg')
-    config = ConfigParser.RawConfigParser()
-    config.read(fn)
+    fn = sys.argv[1]
+except:
+    log.error("Please specifiy config file")
+    sys.exit(1)
 
-    while True:
-        try:
-            # oauth dance
-            auth = login(config)
-            # Create a streaming API and set a timeout value of 1 minute
-            streaming_api = tweepy.streaming.Stream(auth, CustomStreamListener(), timeout=60, secure=True)
-            Q = sys.argv[2:] 
-            print "Track parameters",str(Q)
-            streaming_api.filter(follow=None, track=Q)
-        except Exception, ex:
-            err =  "'%s' '%s' Error '%s' '%s'"%(dbname, str(datetime.now()), str(ex), get_trace())
-            print err
-            file('errors.txt','a').write(err+'\n')
-        finally:
-            print "disconnecting..."
-            streaming_api.disconnect()
-            # time.sleep(60)
-except KeyboardInterrupt:
-    print "got keyboardinterrupt"
+config = ConfigParser.RawConfigParser()
+config.read(fn)
+
+dbs = dict()
+val = config.get('match','databases')
+dbnames = val.split(',') + ['errors']
+for dbname in dbnames:
+    dbname = dbname.strip()
+    log.info("Found %s db"%dbname)
+    dbs[dbname] = getdb(dbname)
+
+track = config.get('match','track').split(',')
+log.info("Found track='%s'"%track)
+regex = config.get('match','regex')
+log.info("Found regex='%s'"%regex)
+
+# main loop
+interrupted = False
+while not interrupted:
+    try:
+        # oauth dance
+        auth = login(config)
+        # Create a streaming API and set a timeout value of 1 minute
+        streaming_api = tweepy.streaming.Stream(auth, CustomStreamListener(dbs,regex), timeout=60, secure=True)
+        #Q = sys.argv[1:] 
+        Q = track
+        log.info("Track parameters %s"%str(Q))
+        streaming_api.filter(follow=None, track=Q)
+    except KeyboardInterrupt:
+        interrupted = True
+        log.info("got keyboardinterrupt")
+    except Exception, ex:
+        err =  "'%s' Error '%s' '%s'"%(str(datetime.now()), str(ex), get_trace())
+        log.error(err)
+        error = True
+    finally:
+        log.info("disconnecting...")
+        streaming_api.disconnect()
+        if not interrupted:
+            time.sleep(5)
+log.error('EXITING')
